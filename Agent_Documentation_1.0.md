@@ -61,6 +61,40 @@ updated: YYYY-MM-DD
 4. **API Contract** — Endpoint tables, request/response JSON examples.
 5. **Data Model** — SQL schemas, TypeScript interfaces, Prisma models, or "No changes."
 6. **Implementation Notes** — Code patterns, library references, architectural decisions.
+
+    6.1. **Libraries Used** (required for all implementations)
+
+    Document every library dependency introduced or relied upon by this feature. Use the following table format:
+
+    | Library | Version | Purpose | Decision Rationale | Alternatives Considered |
+    |---------|---------|---------|-------------------|------------------------|
+    | `example/lib` | v1.2.0 | Brief description of what this library does in context | Why this library was chosen over alternatives | Other libraries evaluated |
+
+    **Rules:**
+    - Include both external dependencies and significant stdlib packages
+    - Version must match the project's dependency manifest (`go.mod`, `package.json`, etc.)
+    - "Purpose" describes what the library does *in this feature*, not the library's general purpose
+    - "Decision Rationale" must reference an ADR if one exists (e.g., "ADR-006: Pure Go, no CGO")
+    - Omit stdlib packages that are trivially expected (e.g., `fmt`, `strings`) unless their usage is non-obvious
+
+    6.2. **Audit & Logging Requirements**
+
+    Every feature that processes requests, modifies state, or enforces authorization must document its audit and logging strategy.
+
+    | Aspect | Requirement |
+    |--------|-------------|
+    | **Audit events** | List each auditable action (e.g., "trust relationship created", "access denied") |
+    | **Log level** | Default log level for each event type (DEBUG, INFO, WARN, ERROR) |
+    | **Failure mode** | What happens when audit logging itself fails? (block request / best-effort / queue) |
+    | **Retention** | How long audit records are kept; any rotation policy |
+    | **Sensitive fields** | Fields that must be redacted or masked in logs |
+    | **Correlation** | How to trace a request across audit entries (request ID, trace ID) |
+
+    **Rules:**
+    - "Best-effort" audit logging (where failures are silently ignored) must be explicitly justified
+    - Security-critical features (auth, trust, access control) should default to blocking on audit failure
+    - All audit tables must have indexed `created_at` columns for efficient retention queries
+
 7. **Acceptance Criteria** — Numbered `AC-001`, `AC-002`, etc. Testable pass/fail statements.
 8. **Dependencies** — Links to other spec files this feature depends on.
 9. **Research References** — External projects, patterns, or standards cited.
@@ -114,6 +148,32 @@ Before marking any documentation task complete, verify ALL of the following:
 - [ ] Terminology is consistent across all docs (see glossary above)
 - [ ] No orphan specs (every spec linked from README feature registry)
 - [ ] No broken cross-references between spec files
+- [ ] Security review completed (see section 6.1)
+- [ ] Library dependencies documented (see section 3, item 6.1)
+
+### 6.1. Security Review Checklist
+
+After implementing any feature, complete this checklist before marking the spec as `stable`:
+
+| Category | Check | Status |
+|----------|-------|--------|
+| **Authentication** | All endpoints require appropriate auth (API key, JWT, service identity) | |
+| **Authorization** | Access control enforced at handler level, not just middleware | |
+| **Input validation** | All request fields validated for type, length, format, and range | |
+| **Error handling** | No silent error discards (`_ = err`) in security-critical paths | |
+| **JSON serialization** | All `json.Marshal`/`json.Unmarshal` errors checked and handled | |
+| **Path traversal** | File paths sanitized; `..` sequences rejected | |
+| **SQL injection** | All queries use parameterized statements (no string concatenation) | |
+| **Audit logging** | All state-changing operations produce audit entries | |
+| **Audit failure mode** | Audit logging failures handled per documented policy (section 3, item 6.2) |
+| **Secrets** | No secrets, tokens, or keys in logs, responses, or error messages | |
+| **Rate limiting** | Endpoints protected against abuse (or explicitly documented as exempt) | |
+| **Expiry/cleanup** | Time-bound records have background cleanup or expiry enforcement | |
+
+**Rules:**
+- Features with status `active` or `stable` must have all checks marked PASS or N/A
+- Any FAIL must have a linked issue or remediation plan
+- Re-run this checklist after every significant code change
 
 ## 7. Maintenance Workflow
 
@@ -132,6 +192,36 @@ Before marking any documentation task complete, verify ALL of the following:
 2. Add `superseded-by: <new-feature-id>` to frontmatter
 3. Update `README.md` status to `[DEPRECATED]`
 4. Add deprecation notice at top of spec: "This feature is deprecated. See [new-feature](link)."
+
+### Post-Implementation Review
+
+After a feature is implemented and merged, document outcomes by following this workflow:
+
+1. **Compare spec vs. implementation** — Review the committed code against the spec. Note any deviations, additions, or omissions.
+2. **Complete the Security Review Checklist** (section 6.1) — Record results in the spec or a linked review document.
+3. **Document libraries used** — Fill in the Libraries Used table (section 3, item 6.1) with actual dependencies from the implementation.
+4. **Record implementation outcomes** — Add an "Implementation Outcomes" appendix to the spec or create a review document in `docs/reviews/`:
+
+    ```markdown
+    ## Implementation Outcomes
+
+    | Metric | Value |
+    |--------|-------|
+    | Commit | `<hash>` |
+    | Files changed | N |
+    | Lines added | N |
+    | Test coverage | N% (or "None — tracked in issue #X") |
+    | Security review | PASS / PARTIAL / PENDING |
+
+    ### Deviations from spec
+    - List any differences between spec and implementation
+
+    ### Open items
+    - List any follow-up work identified during implementation
+    ```
+
+5. **Update spec status** — Move from `draft` to `active` if implementation is complete. Move to `stable` after the security review checklist is fully passed.
+6. **Create review summary** — If the implementation is significant (>500 LOC or touches >5 files), create `docs/reviews/<feature-id>-review.md` with detailed findings.
 
 ### Staleness Detection
 - Compare spec `updated` dates against git log for related source files
@@ -171,6 +261,8 @@ After every documentation task, produce this report:
 - [ ] Frontmatter valid: PASS/FAIL
 - [ ] No duplicate IDs: PASS/FAIL
 - [ ] Terminology consistent: PASS/FAIL
+- [ ] Security review completed: PASS/FAIL
+- [ ] Library dependencies documented: PASS/FAIL
 
 ### Outstanding Items
 - [NEEDS CLARIFICATION] Description of ambiguous requirement
