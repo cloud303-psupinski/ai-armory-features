@@ -7,16 +7,20 @@ updated: 2026-01-31
 
 # AI-Armory Platform Architecture
 
-## Component Overview
+## Executive Summary
+
+Two interconnected features that enable the AI-Armory frontend to manage AI agent containers through the WAP (Web Application Platform) Docker Manager. Includes trust-based access control, file injection into running containers, real-time health monitoring, version management, and environment configuration.
+
+## Components
 
 | Component | Stack | Role |
 |-----------|-------|------|
-| **WAP Docker Manager** | Go 1.23 (Gin) + Rust (Bollard/Tokio) + NATS 2.10 + SQLite | Container orchestration and trust-based access control |
-| **AI-Armory Server** | TypeScript (Fastify 5) + Prisma + PostgreSQL + Redis + Socket.io | Application backend, user auth, project management |
-| **AI-Armory Frontend** | Next.js 16 + Tailwind CSS | User interface for agent and project management |
-| **Agent Containers** | TypeScript + Claude Code CLI + Memvid memory | AI agent runtime environments |
+| **WAP Docker Manager** | Go 1.23 (Gin) + Rust (Bollard/Tokio) + NATS 2.10 + SQLite | Docker container management via NATS message bus to Rust agent that communicates with Docker socket via Bollard SDK. SSE real-time events. Template/blueprint deployment system. Hierarchical configuration with materialized path pattern. |
+| **AI-Armory Server** | TypeScript (Fastify 5) + Prisma + PostgreSQL + Redis + Socket.io | Orchestration layer for AI agents. Manages projects, rooms, sessions, containers. Calls WAP HTTP API (Basic Auth) for container lifecycle. Syncs container status via polling (30s) + SSE events. |
+| **AI-Armory Frontend** | Next.js 16 + Tailwind CSS | User-facing UI for projects, rooms, chat with AI agents. Real-time updates via Socket.io. |
+| **Agent Containers** | TypeScript + Claude Code CLI + Memvid memory | Long-lived Docker containers running Claude Code. Connect to server via WebSocket. Per-room chat sessions with conversation history. Semantic memory via memvid SDK. |
 
-## Integration Flow
+## Current Integration Flow
 
 ```
 AI-Armory Frontend (Next.js)
@@ -34,32 +38,33 @@ WAP Agent (Rust/Bollard)
 Docker Engine
 ```
 
-## Current Capabilities
+## What Exists
 
-- Container lifecycle management (create/start/stop/restart/remove) via WAP API
-- Container status synchronization (30s polling + SSE events)
-- WAP template caching for container configuration
-- Machine token authentication between services
-- WebSocket real-time events for frontend updates
-- Docker events streaming via Server-Sent Events
+- Container create/start/stop/restart/remove via WAP API
+- Container status sync (30s polling + SSE events)
+- WAP template caching in AI-Armory server
+- Machine token auth for agent containers
+- WebSocket real-time events for container status changes
+- Docker events streaming via SSE
 
-## Gaps Addressed by Feature Specs
+## What's Missing
 
-- **Trust system** — No inter-service permission model exists. See [WAP Trust System](specs/wap-trust-system/spec.md).
-- **File injection** — No way to read/write files inside running containers. See [WAP File Injection](specs/wap-file-injection/spec.md).
-- **Version management** — No rolling-update or env-var management. See [WAP Version Management](specs/wap-version-management/spec.md).
-- **Health monitoring** — No aggregated health or resource metrics. See [WAP Health Monitoring](specs/wap-health-monitoring/spec.md).
-- **Server API** — No Armory Server routes for agent control. See [Armory Agent API](specs/armory-agent-api/spec.md).
-- **Frontend UI** — No agent management dashboard or file editor. See [Armory Agent UI](specs/armory-agent-ui/spec.md).
-- **Config watcher** — No hot-reload for agent instructions. See [Agent Config Watcher](specs/agent-config-watcher/spec.md).
+- No trust relationship model between services/containers. See [WAP Trust System](specs/wap-trust-system/spec.md).
+- No file injection/update capability for running containers. See [WAP File Injection](specs/wap-file-injection/spec.md).
+- No agent instruction file management (CLAUDE.md editing). See [WAP File Injection](specs/wap-file-injection/spec.md).
+- No version management (rolling updates). See [WAP Version Management](specs/wap-version-management/spec.md).
+- No real-time health aggregation dashboard. See [WAP Health Monitoring](specs/wap-health-monitoring/spec.md).
+- No parameterized access control (per-path, per-action). See [WAP Trust System](specs/wap-trust-system/spec.md).
+- No environment variable management UI. See [Armory Agent UI](specs/armory-agent-ui/spec.md).
+- No container logs viewer. See [WAP Health Monitoring](specs/wap-health-monitoring/spec.md).
 
 ## Infrastructure
 
 | Service | Purpose |
 |---------|---------|
-| Traefik | Reverse proxy, TLS termination |
+| Traefik | Reverse proxy, TLS termination, routing |
 | PostgreSQL | AI-Armory Server database |
 | Redis | Cache, Socket.io adapter |
 | MinIO | S3-compatible object storage |
 | NATS | WAP internal message bus |
-| SuperTokens | User authentication |
+| SuperTokens | Authentication (OAuth, email/password) |

@@ -16,7 +16,7 @@ updated: 2026-01-31
 
 ## Summary
 
-Aggregated health, resource usage (CPU/memory/network/disk), and log streaming endpoints for all managed containers. Provides both snapshot queries and real-time SSE streams. Data flows from Docker Engine through Bollard, over NATS, to WAP Core HTTP endpoints.
+Aggregate health, resource usage, and logs from all managed containers into a single API. Provides both snapshot queries and real-time SSE streams. Data flows from Docker Engine through Bollard, over NATS, to WAP Core HTTP endpoints.
 
 ## Use Cases
 
@@ -40,22 +40,23 @@ Aggregated health, resource usage (CPU/memory/network/disk), and log streaming e
 | Subject | Description |
 |---------|-------------|
 | `docker.container.health` | Single container health status |
-| `docker.container.health.all` | All containers summary |
-| `docker.container.stats` | Resource usage stats |
-| `docker.container.stats.stream` | Streaming stats |
+| `docker.container.health.all` | All containers health summary |
+| `docker.container.stats` | Container resource usage stats |
+| `docker.container.stats.stream` | Streaming stats (for real-time dashboards) |
 
 ### HTTP Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/containers/health` | All containers health summary |
-| GET | `/api/v1/containers/:id/health` | Single container detailed health |
-| GET | `/api/v1/containers/:id/stats` | CPU/memory/network stats |
-| GET | `/api/v1/containers/:id/logs?tail=100&follow=true` | Container logs (SSE) |
+| `GET` | `/api/v1/containers/health` | All containers health summary |
+| `GET` | `/api/v1/containers/:id/health` | Single container detailed health |
+| `GET` | `/api/v1/containers/:id/stats` | CPU/memory/network stats snapshot |
+| `GET` | `/api/v1/containers/:id/logs?tail=100&follow=true` | Container logs (SSE stream) |
 
 ### Health Summary — Response
 
 ```json
+// GET /api/v1/containers/health
 {
     "timestamp": "2026-01-31T10:45:00Z",
     "total": 5,
@@ -90,7 +91,7 @@ Aggregated health, resource usage (CPU/memory/network/disk), and log streaming e
 }
 ```
 
-### Log Streaming — SSE Format
+### Log Streaming (SSE)
 
 ```
 GET /api/v1/containers/armory-ideation/logs?tail=50&follow=true
@@ -132,9 +133,10 @@ No additional database tables. Health and stats data is read in real time from D
 
 ## Research References
 
-- **cAdvisor**: Container resource monitoring and performance analysis
-- **Docker Stats API**: `/containers/{id}/stats` endpoint for resource metrics
-- **Prometheus**: Standard metrics format for container monitoring exporters
+- **Docker Events API**: `GET /events` streaming endpoint for container lifecycle events
+- **Docker Stats API**: `GET /containers/{id}/stats` for real-time resource usage
+- **SSE (Server-Sent Events)**: Recommended over WebSocket for one-way server-to-client monitoring (auto-reconnect, HTTP-compatible)
+- **Prometheus prom-client**: Metrics export pattern used by AI-Armory server
 
 ## Out of Scope
 

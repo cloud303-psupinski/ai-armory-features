@@ -29,35 +29,90 @@ See [docs/architecture.md](docs/architecture.md) for integration flow and infras
 
 ## Implementation Roadmap
 
-| Phase | Scope | Key Deliverables |
-|-------|-------|------------------|
-| 1 | WAP Trust System | SQLite migration, Go middleware, 7 API endpoints |
-| 2 | WAP File Operations | Rust Bollard handlers, NATS subjects, 4 HTTP endpoints |
-| 3 | WAP Health & Monitoring | Health aggregation, stats, SSE log streaming |
-| 4 | WAP Version Management | Rust rolling-update handler, env var endpoints |
-| 5 | AI-Armory Server Integration | 15 route proxies, WapClient extensions, Prisma migration |
-| 6 | AI-Armory Frontend | Agent dashboard, file editor, health dashboard |
-| 7 | Agent Container Updates | Config watcher, parameter registration, hot-reload |
+### Phase 1: Foundation (WAP Trust System)
+
+- [ ] SQLite migration for trust_relationships + trust_audit_log tables
+- [ ] Go models and repository for trust CRUD
+- [ ] Trust check middleware
+- [ ] Trust API endpoints (7 endpoints)
+- [ ] Seed default trust for armory-server -> * (full access)
+
+### Phase 2: File Operations (WAP + Rust Agent)
+
+- [ ] Rust file read/write handlers using Bollard tar API
+- [ ] NATS subject handlers for file operations
+- [ ] Go HTTP endpoints for file CRUD (4 endpoints)
+- [ ] Trust path checking with glob pattern matching
+
+### Phase 3: Health & Monitoring (WAP)
+
+- [ ] Container health aggregation endpoint
+- [ ] Container stats endpoint (Docker Stats API)
+- [ ] Container logs streaming via SSE
+- [ ] NATS subjects for health queries
+
+### Phase 4: Version Management (WAP + Rust Agent)
+
+- [ ] Rust rolling update handler (inspect -> pull -> stop -> remove -> create -> start)
+- [ ] NATS subject for container update
+- [ ] Go HTTP endpoint for update-image
+- [ ] Environment variable read/update endpoints
+
+### Phase 5: AI-Armory Server Integration
+
+- [ ] New agentControlRoutes.ts (18 endpoints)
+- [ ] WapClient extensions (12 new methods)
+- [ ] Prisma schema update (accessParameters, capabilities)
+- [ ] Socket.io event broadcasting for agent updates
+
+### Phase 6: AI-Armory Frontend
+
+- [ ] Agent management dashboard page
+- [ ] Agent file editor page with code editor
+- [ ] Global agent health dashboard
+- [ ] AgentControls reusable component
+- [ ] Agent API client module
+
+### Phase 7: Agent Container Updates
+
+- [ ] Config watcher service (chokidar)
+- [ ] Parameter registration on startup
+- [ ] Hot-reload system prompt from disk
+- [ ] New compose environment variables
 
 ## Related Projects
 
+### AI-Armory Ecosystem
+
 | Application | Repository | Purpose |
 |-------------|-----------|---------|
-| AI-Armory Frontend | cloud303-psupinski/ai-armory | Next.js UI |
-| AI-Armory Server | cloud303-psupinski/app-forge-chat | Fastify API |
-| WAP Docker Manager | (private) | Go+Rust Docker management |
-| Agent Client | (armory-client) | TypeScript Claude Code agents |
-| AI-Armory Features | cloud303-psupinski/ai-armory-features | This repo — feature specs |
+| **AI-Armory Frontend** | cloud303-psupinski/ai-armory (formerly happy-tsk-next) | Next.js UI for projects, rooms, agent chat |
+| **AI-Armory Server** | cloud303-psupinski/app-forge-chat (formerly happy-server) | Fastify API, container orchestration, auth |
+| **WAP Docker Manager** | (private) | Go+Rust Docker management platform |
+| **Agent Client** | (armory-client) | TypeScript Claude Code agent containers |
+| **AI-Armory Features** | cloud303-psupinski/ai-armory-features | Feature specifications (this repo) |
 
-## Security Principles
+### Infrastructure
 
-- File operations restricted to declared glob patterns via trust system
-- Audit log records every access-checked operation
-- Environment variable display filters sensitive values
-- Container exec disabled by default
-- Trust relationships support expiration dates
-- Rolling updates restricted to pre-approved images
-- Agent containers run as non-root
+| Service | Purpose |
+|---------|---------|
+| Traefik | Reverse proxy, TLS termination, routing |
+| PostgreSQL | AI-Armory Server database |
+| Redis | Cache, Socket.io adapter |
+| MinIO | S3-compatible object storage |
+| NATS | WAP internal message bus |
+| SuperTokens | Authentication (OAuth, email/password) |
+
+## Security Considerations
+
+- All file operations are path-restricted via trust_relationships glob patterns
+- Trust audit log captures every operation (allowed and denied)
+- Environment variable display filters sensitive values (passwords, tokens, API keys)
+- File write operations validate content size limits
+- Container exec is disabled by default (most restrictive)
+- Trust relationships can have expiration dates
+- Rolling updates only allow pre-approved image patterns
+- Agent containers run as non-root user
 
 ## Documentation
 

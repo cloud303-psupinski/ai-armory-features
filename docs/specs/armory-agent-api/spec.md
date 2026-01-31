@@ -35,29 +35,29 @@ A new `agentControlRoutes.ts` module in the AI-Armory Server (Fastify) that prox
 
 ## API Contract
 
-### REST Endpoints
+### New Route Module: `agentControlRoutes.ts`
 
-All routes are prefixed with `/v1/agents/`.
+All routes require user authentication (SuperTokens session) and verify the user owns the container via `ContainerLaunch.accountId`.
 
 | Method | Path | Description | WAP Proxy |
 |--------|------|-------------|-----------|
-| POST | `/:containerId/restart` | Restart container | `POST /containers/:wapId/restart` |
-| POST | `/:containerId/stop` | Stop container | `POST /containers/:wapId/stop` |
-| POST | `/:containerId/start` | Start container | `POST /containers/:wapId/start` |
-| POST | `/:containerId/update-version` | Update version | `POST /containers/:wapId/update-image` |
-| GET | `/:containerId/versions` | List versions | Local query |
-| GET | `/:containerId/files` | List files | `GET /containers/:wapId/files` |
-| GET | `/:containerId/files/*path` | Read file | `GET /containers/:wapId/files/read` |
-| PUT | `/:containerId/files/*path` | Write file | `PUT /containers/:wapId/files/write` |
-| DELETE | `/:containerId/files/*path` | Delete file | `DELETE /containers/:wapId/files` |
-| GET | `/health` | All health summary | `GET /containers/health` |
-| GET | `/:containerId/health` | Single health | `GET /containers/:wapId/health` |
-| GET | `/:containerId/stats` | Resource stats | `GET /containers/:wapId/stats` |
-| GET | `/:containerId/logs` | Recent logs | `GET /containers/:wapId/logs` |
-| GET | `/:containerId/env` | Get env vars | `GET /containers/:wapId/env` |
-| PATCH | `/:containerId/env` | Update env vars | `PATCH /containers/:wapId/env` |
+| `POST` | `/v1/agents/:containerId/restart` | Restart agent container | `POST /containers/:wapId/restart` |
+| `POST` | `/v1/agents/:containerId/stop` | Stop agent container | `POST /containers/:wapId/stop` |
+| `POST` | `/v1/agents/:containerId/start` | Start agent container | `POST /containers/:wapId/start` |
+| `POST` | `/v1/agents/:containerId/update-version` | Update agent image version | `POST /containers/:wapId/update-image` |
+| `GET` | `/v1/agents/:containerId/versions` | List available image versions | Local query |
+| `GET` | `/v1/agents/:containerId/files` | List instruction files | `GET /containers/:wapId/files` |
+| `GET` | `/v1/agents/:containerId/files/*path` | Read file content | `GET /containers/:wapId/files/read` |
+| `PUT` | `/v1/agents/:containerId/files/*path` | Write/update file | `PUT /containers/:wapId/files/write` |
+| `DELETE` | `/v1/agents/:containerId/files/*path` | Delete file | `DELETE /containers/:wapId/files` |
+| `GET` | `/v1/agents/health` | All agents health summary | `GET /containers/health` |
+| `GET` | `/v1/agents/:containerId/health` | Single agent health | `GET /containers/:wapId/health` |
+| `GET` | `/v1/agents/:containerId/stats` | Resource stats | `GET /containers/:wapId/stats` |
+| `GET` | `/v1/agents/:containerId/logs` | Recent logs | `GET /containers/:wapId/logs` |
+| `GET` | `/v1/agents/:containerId/env` | Get env vars (filtered) | `GET /containers/:wapId/env` |
+| `PATCH` | `/v1/agents/:containerId/env` | Update env vars | `PATCH /containers/:wapId/env` |
 
-### Socket.io Events
+### Socket.io Events (New)
 
 | Event | Direction | Data |
 |-------|-----------|------|
@@ -74,6 +74,7 @@ All routes are prefixed with `/v1/agents/`.
 model ContainerLaunch {
     // ... existing fields ...
 
+    // New: agent access parameters (reported by container on startup)
     accessParameters   Json?     // { writablePaths, readOnlyPaths, configDir, ... }
     agentCapabilities  String[]  // ["file.read", "file.write", "restart", "hot-reload"]
     instructionsDir    String?   // "/app/config/instructions"
@@ -81,9 +82,11 @@ model ContainerLaunch {
 }
 ```
 
-### WapClient TypeScript Extensions
+### WapClient Extensions
 
 ```typescript
+// Add to sources/app/wap/wapClient.ts
+
 // Health & monitoring
 async getContainerHealth(containerId: string): Promise<ContainerHealth>
 async getAllContainerHealth(): Promise<ContainerHealthSummary>

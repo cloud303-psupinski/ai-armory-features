@@ -16,7 +16,7 @@ updated: 2026-01-31
 
 ## Summary
 
-A fine-grained, per-container permission model that controls which services can perform which actions on which containers. All access decisions are recorded in an audit log. This is the foundational security layer that all other WAP features depend on.
+Define per-service, per-container access permissions. Every operation proxied through WAP is checked against this table before execution. All operations are audit-logged. This is the foundational security layer that all other WAP features depend on.
 
 ## Use Cases
 
@@ -39,15 +39,15 @@ A fine-grained, per-container permission model that controls which services can 
 
 ### Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/trust` | List all trust relationships |
-| POST | `/api/v1/trust` | Create trust relationship |
-| GET | `/api/v1/trust/:id` | Get specific relationship |
-| PATCH | `/api/v1/trust/:id` | Update permissions |
-| DELETE | `/api/v1/trust/:id` | Revoke trust |
-| GET | `/api/v1/trust/audit` | Query audit log |
-| POST | `/api/v1/trust/check` | Check if action is allowed |
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `GET` | `/api/v1/trust` | List all trust relationships | Service Auth |
+| `POST` | `/api/v1/trust` | Create trust relationship | Service Auth |
+| `GET` | `/api/v1/trust/:id` | Get specific relationship | Service Auth |
+| `PATCH` | `/api/v1/trust/:id` | Update permissions | Service Auth |
+| `DELETE` | `/api/v1/trust/:id` | Revoke trust | Service Auth |
+| `GET` | `/api/v1/trust/audit` | Query audit log (filterable) | Service Auth |
+| `POST` | `/api/v1/trust/check` | Check if action is allowed | Service Auth |
 
 ### Trust Check — Request/Response
 
@@ -72,30 +72,37 @@ A fine-grained, per-container permission model that controls which services can 
 
 ## Data Model
 
-### SQLite Schema
+### Database Migration (SQLite)
 
 ```sql
+-- Migration: 004_trust_relationships.up.sql
+
 CREATE TABLE trust_relationships (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-    caller_service TEXT NOT NULL,
-    target_container TEXT NOT NULL,
-    can_inspect BOOLEAN DEFAULT 1,
-    can_start BOOLEAN DEFAULT 0,
-    can_stop BOOLEAN DEFAULT 0,
-    can_restart BOOLEAN DEFAULT 0,
-    can_remove BOOLEAN DEFAULT 0,
-    can_exec BOOLEAN DEFAULT 0,
-    can_logs BOOLEAN DEFAULT 1,
-    can_stats BOOLEAN DEFAULT 1,
-    file_read_paths TEXT DEFAULT '[]',
-    file_write_paths TEXT DEFAULT '[]',
-    can_update_env BOOLEAN DEFAULT 0,
-    can_update_image BOOLEAN DEFAULT 0,
-    allowed_images TEXT DEFAULT '[]',
+    -- Identity
+    caller_service TEXT NOT NULL,        -- e.g., "armory-server", "monitoring-svc"
+    target_container TEXT NOT NULL,       -- e.g., "armory-ideation", "*" (wildcard)
+    -- Container lifecycle permissions
+    can_inspect BOOLEAN DEFAULT 1,       -- docker inspect
+    can_start BOOLEAN DEFAULT 0,         -- docker start
+    can_stop BOOLEAN DEFAULT 0,          -- docker stop
+    can_restart BOOLEAN DEFAULT 0,       -- docker restart
+    can_remove BOOLEAN DEFAULT 0,        -- docker rm
+    can_exec BOOLEAN DEFAULT 0,          -- docker exec
+    can_logs BOOLEAN DEFAULT 1,          -- docker logs
+    can_stats BOOLEAN DEFAULT 1,         -- docker stats
+    -- File access (JSON arrays of glob patterns)
+    file_read_paths TEXT DEFAULT '[]',   -- e.g., ["/app/config/*", "/data/memory/*"]
+    file_write_paths TEXT DEFAULT '[]',  -- e.g., ["/app/config/instructions/*"]
+    -- Container update permissions
+    can_update_env BOOLEAN DEFAULT 0,    -- modify environment variables
+    can_update_image BOOLEAN DEFAULT 0,  -- rolling image update
+    allowed_images TEXT DEFAULT '[]',    -- e.g., ["ai-armory-client:*", "armory-agent:v2.*"]
+    -- Metadata
     description TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expires_at DATETIME,
+    expires_at DATETIME,                 -- NULL = never expires
     UNIQUE(caller_service, target_container)
 );
 
@@ -104,13 +111,18 @@ CREATE TABLE trust_audit_log (
     trust_id TEXT REFERENCES trust_relationships(id) ON DELETE SET NULL,
     caller_service TEXT NOT NULL,
     target_container TEXT NOT NULL,
-    action TEXT NOT NULL,
-    resource_path TEXT,
+    action TEXT NOT NULL,                -- e.g., "container.restart", "file.write"
+    resource_path TEXT,                  -- file path or specific resource
     allowed BOOLEAN NOT NULL,
-    reason TEXT,
-    request_metadata TEXT,
+    reason TEXT,                          -- why allowed/denied
+    request_metadata TEXT,               -- JSON: IP, user-agent, etc.
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_trust_caller ON trust_relationships(caller_service);
+CREATE INDEX idx_trust_target ON trust_relationships(target_container);
+CREATE INDEX idx_audit_caller ON trust_audit_log(caller_service);
+CREATE INDEX idx_audit_created ON trust_audit_log(created_at);
 ```
 
 ## Implementation Notes
@@ -121,7 +133,7 @@ CREATE TABLE trust_audit_log (
 func TrustCheckMiddleware(repo *repository.TrustRepository) gin.HandlerFunc {
     return func(c *gin.Context) {
         caller := c.GetString("authenticated_service")
-        target := c.Param("id")
+        target := c.Param("id") // container ID or name
         action := deriveAction(c.Request.Method, c.FullPath())
 
         allowed, trust, err := repo.CheckAccess(caller, target, action, c.Query("path"))
@@ -155,11 +167,11 @@ None — this is the foundational feature.
 
 ## Research References
 
-- **Portainer**: Reverse-proxy to Docker Engine API with RBAC
-- **Docker Socket Proxy** (Tecnativa): Boolean env var toggles per API section
-- **foxxmd/docker-proxy-filter**: Per-container request filtering
-- **Coolify**: Tiered permission levels for container management
-- **OPA (Open Policy Agent)**: Rego-based policy evaluation for fine-grained authorization
+- **Portainer**: Reverse-proxy to Docker Engine API via `/api/endpoints/{ENV_ID}/docker/...` gateway
+- **Docker Socket Proxy** (Tecnativa): Boolean env var toggles per API section (CONTAINERS=1, EXEC=0, POST=1)
+- **foxxmd/docker-proxy-filter**: Per-container filtering on top of socket proxy
+- **Coolify**: Tiered permission levels (root, write, deploy, read, read:sensitive)
+- **OPA (Open Policy Agent)**: Rego policies for fine-grained service-to-service authorization
 
 ## Out of Scope
 

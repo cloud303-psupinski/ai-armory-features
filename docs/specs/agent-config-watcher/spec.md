@@ -72,7 +72,16 @@ No database changes. Parameters are registered via the existing `serverClient.up
 
 ## Implementation Notes
 
-### ConfigWatcher Service
+### Config Watcher Service
+
+New file: `src/services/config-watcher.ts`
+
+Watches the instructions directory for file changes using `chokidar` (cross-platform file watcher). When files change:
+
+1. Detect the changed file
+2. Reload system prompt from disk
+3. Log the reload event
+4. Report via WebSocket `machine-update` event to server
 
 ```typescript
 import chokidar from 'chokidar';
@@ -115,6 +124,8 @@ class ConfigWatcher {
 ```
 
 ### Parameter Registration on Startup
+
+When the agent container starts, it registers its access parameters:
 
 ```typescript
 // In src/index.ts -- after machine registration

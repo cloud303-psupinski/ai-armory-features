@@ -45,7 +45,7 @@ This feature consumes the [Armory Agent API](../armory-agent-api/spec.md) endpoi
 |-------|------|-------------|
 | `/projects/[projectId]/agents` | Agent Management Dashboard | Per-project agent list with controls |
 | `/projects/[projectId]/agents/[containerId]/files` | Agent File Editor | File tree + text editor |
-| `/agents` | Agent Health Dashboard | Cross-project health overview |
+| `/agents` | Agent Health Dashboard (Global) | Cross-project health overview |
 
 ## Data Model
 
@@ -53,7 +53,9 @@ No additional data model changes. This feature consumes the Prisma schema define
 
 ## Implementation Notes
 
-### Agent Management Dashboard Wireframe
+### Agent Management Dashboard
+
+**Route:** `/projects/[projectId]/agents`
 
 ```
 +---------------------------------------------+
@@ -71,7 +73,9 @@ No additional data model changes. This feature consumes the Prisma schema define
 +---------------------------------------------+
 ```
 
-### Agent File Editor Wireframe
+### Agent File Editor
+
+**Route:** `/projects/[projectId]/agents/[containerId]/files`
 
 ```
 +------------------+---------------------------+
@@ -87,7 +91,9 @@ No additional data model changes. This feature consumes the Prisma schema define
 +------------------+---------------------------+
 ```
 
-### Agent Health Dashboard Wireframe
+### Agent Health Dashboard (Global)
+
+**Route:** `/agents`
 
 ```
 +---------------------------------------------+
@@ -103,6 +109,8 @@ No additional data model changes. This feature consumes the Prisma schema define
 ```
 
 ### AgentControls Component (Reusable)
+
+Embedded in the room page alongside the chat:
 
 ```
 +------------------------------+

@@ -16,7 +16,7 @@ updated: 2026-01-31
 
 ## Summary
 
-Provides a rolling-update mechanism to upgrade agent containers to a new image version without losing volume data or network configuration. Also exposes environment variable read/write endpoints for runtime configuration. All operations are gated by the trust system's `can_update_image`, `allowed_images`, and `can_update_env` permissions.
+Rolling updates for agent containers: pull new image, recreate container with same config. Also exposes environment variable read/write endpoints for runtime configuration. All operations are gated by the trust system's `can_update_image`, `allowed_images`, and `can_update_env` permissions.
 
 ## Use Cases
 
@@ -39,15 +39,15 @@ Provides a rolling-update mechanism to upgrade agent containers to a new image v
 
 | Subject | Description |
 |---------|-------------|
-| `docker.container.update` | Stop -> remove -> pull -> create -> start |
+| `docker.container.update` | Stop -> remove -> pull -> create -> start with new image |
 
 ### HTTP Endpoints
 
 | Method | Path | Description | Trust Check |
 |--------|------|-------------|-------------|
-| POST | `/api/v1/containers/:id/update-image` | Rolling update | `can_update_image` + `allowed_images` |
-| GET | `/api/v1/containers/:id/env` | Get env vars | `can_inspect` |
-| PATCH | `/api/v1/containers/:id/env` | Update env vars | `can_update_env` |
+| `POST` | `/api/v1/containers/:id/update-image` | Rolling update to new image version | `can_update_image` + `allowed_images` |
+| `GET` | `/api/v1/containers/:id/env` | Get container env vars | `can_inspect` |
+| `PATCH` | `/api/v1/containers/:id/env` | Update env vars (requires recreate) | `can_update_env` |
 
 ### Update Image — Request/Response
 
@@ -83,12 +83,12 @@ Provides a rolling-update mechanism to upgrade agent containers to a new image v
    c. Send NATS request to agent
 
 3. WAP Agent (Rust):
-   a. docker.inspect_container(id) -> capture config
-   b. docker.pull_image(image:tag)
-   c. docker.stop_container(id)
-   d. docker.remove_container(id)
-   e. docker.create_container(config + new image)
-   f. docker.start_container(new_id)
+   a. docker.inspect_container(id) -> capture full config
+   b. docker.pull_image(image:tag) -> pull new image
+   c. docker.stop_container(id) -> graceful stop
+   d. docker.remove_container(id) -> remove old
+   e. docker.create_container(config + new image) -> create new
+   f. docker.start_container(new_id) -> start
    g. Return new container ID
 
 4. WAP Core -> SSE broadcast: { type: "version-update", containerId, status, newTag }

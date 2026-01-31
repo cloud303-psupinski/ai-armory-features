@@ -16,7 +16,7 @@ updated: 2026-01-31
 
 ## Summary
 
-Enables reading, writing, listing, and deleting files inside running Docker containers through the WAP proxy layer. Uses Bollard's Docker tar API for file transfer and NATS for communication between WAP Core (Go) and WAP Agent (Rust). All operations are gated by the trust system's `file_read_paths` and `file_write_paths` glob patterns.
+Read, write, list, and delete files inside running containers without rebuilding. Primary use case: updating agent instruction files (CLAUDE.md) and configuration. Uses Bollard's Docker tar API for file transfer and NATS for communication between WAP Core (Go) and WAP Agent (Rust). All operations are gated by the trust system's `file_read_paths` and `file_write_paths` glob patterns.
 
 ## Use Cases
 
@@ -37,23 +37,23 @@ Enables reading, writing, listing, and deleting files inside running Docker cont
 
 ## API Contract
 
-### NATS Subjects
+### NATS Subjects (Rust Agent)
 
 | Subject | Direction | Description |
 |---------|-----------|-------------|
-| `docker.container.file.read` | Request/Reply | Read file content |
-| `docker.container.file.write` | Request/Reply | Write file |
-| `docker.container.file.list` | Request/Reply | List directory |
-| `docker.container.file.delete` | Request/Reply | Delete file |
+| `docker.container.file.read` | Request/Reply | Read file content from container |
+| `docker.container.file.write` | Request/Reply | Write file to container |
+| `docker.container.file.list` | Request/Reply | List directory contents |
+| `docker.container.file.delete` | Request/Reply | Delete file from container |
 
 ### HTTP Endpoints
 
 | Method | Path | Description | Trust Check |
 |--------|------|-------------|-------------|
-| GET | `/api/v1/containers/:id/files?path=<dir>` | List directory | `file_read_paths` |
-| GET | `/api/v1/containers/:id/files/read?path=<file>` | Read file | `file_read_paths` |
-| PUT | `/api/v1/containers/:id/files/write` | Write file | `file_write_paths` |
-| DELETE | `/api/v1/containers/:id/files?path=<file>` | Delete file | `file_write_paths` |
+| `GET` | `/api/v1/containers/:id/files?path=<dir>` | List directory contents | `file_read_paths` |
+| `GET` | `/api/v1/containers/:id/files/read?path=<file>` | Read file content (base64 or UTF-8) | `file_read_paths` |
+| `PUT` | `/api/v1/containers/:id/files/write` | Write file content | `file_write_paths` |
+| `DELETE` | `/api/v1/containers/:id/files?path=<file>` | Delete file | `file_write_paths` |
 
 ### Write File — Request
 
@@ -97,6 +97,10 @@ No additional database tables. File operations are stateless pass-through to Doc
 ## Implementation Notes
 
 ### Rust Bollard File Handlers
+
+Uses Docker Engine API's archive endpoints:
+- **Write**: `PUT /containers/{id}/archive` -- uploads a tar archive
+- **Read**: `GET /containers/{id}/archive` -- downloads a tar archive
 
 ```rust
 use bollard::container::{UploadToContainerOptions, DownloadFromContainerOptions};
@@ -162,6 +166,7 @@ async fn list_directory(
     container_id: &str,
     path: &str,
 ) -> Result<Vec<FileEntry>> {
+    // Use docker exec to list directory
     let exec = docker
         .create_exec(
             container_id,
@@ -198,8 +203,10 @@ async fn list_directory(
 
 ## Research References
 
-- **Bollard** (Rust Docker client): `upload_to_container` / `download_from_container` use tar archives
-- **Docker Engine API**: `/containers/{id}/archive` endpoint (GET/PUT/HEAD)
+- **Docker Engine API**: `PUT /containers/{id}/archive` for tar-based file upload
+- **Bollard SDK**: `upload_to_container` / `download_from_container` methods
+- **Kubernetes ConfigMaps**: Volume-mounted configs with symlink rotation for updates
+- **Stakater Reloader**: Watches ConfigMap changes and triggers pod rollouts
 
 ## Out of Scope
 
